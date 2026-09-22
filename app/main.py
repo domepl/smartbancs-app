@@ -1,10 +1,15 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import engine, get_db
 from app.models import Account
+from app.schemas import (
+    TransactionCreate,
+    TransactionResponse,
+)
+from app.services import process_transaction
 
 app = FastAPI(
     title="SmartBancs API",
@@ -53,3 +58,17 @@ def get_accounts(db: Session = Depends(get_db)):
         }
         for account in accounts
     ]
+
+@app.post(
+    "/transactions",
+    response_model=TransactionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_transaction(
+    request: TransactionCreate,
+    db: Session = Depends(get_db),
+):
+    return process_transaction(
+        db=db,
+        request=request,
+    )
