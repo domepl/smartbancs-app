@@ -5,7 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Account, Transaction
+from app.models import (
+    Account,
+    OutboxEvent,
+    Transaction,
+)
 from app.schemas import TransactionCreate
 
 
@@ -33,6 +37,25 @@ def build_transaction_response(
         "created_at": transaction.created_at,
     }
 
+def create_outbox_event(
+    transaction: Transaction,
+    request: TransactionCreate,
+):
+    return OutboxEvent(
+        id=str(uuid4()),
+        transaction_id=transaction.id,
+        event_type="TRANSACTION_COMPLETED",
+        payload={
+            "transaction_id": transaction.id,
+            "source_account": request.source_account,
+            "destination_account": request.destination_account,
+            "amount": str(request.amount),
+            "currency": request.currency,
+            "status": "COMPLETED",
+        },
+        status="PENDING",
+        retry_count=0,
+    )
 
 def process_transaction(
     db: Session,
@@ -181,6 +204,15 @@ def process_transaction(
         )
 
         db.add(transaction)
+
+        db.flush()  # Asegura que transaction.id esté disponible para el evento de outbox.
+
+        outbox_event = create_outbox_event(
+            transaction=transaction,
+            request=request,
+        )
+
+        db.add(outbox_event)
 
         # 8. Confirmar operación.
         db.commit()
