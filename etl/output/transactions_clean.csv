@@ -1,0 +1,5 @@
+transaction_id,customer_id,transaction_type,amount,currency,transaction_date
+TX001,C001,TRANSFER,100.5,USD,2026-09-20
+TX003,C003,PAYMENT,75.25,USD,2026-09-21
+TX005,C005,TRANSFER,500.0,EUR,2026-09-21
+TX009,C009,PAYMENT,45.75,USD,2026-09-22
