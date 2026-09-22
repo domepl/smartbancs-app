@@ -1,4 +1,10 @@
-from fastapi import Depends, FastAPI, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    Response,
+    status,
+)
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -62,13 +68,27 @@ def get_accounts(db: Session = Depends(get_db)):
 @app.post(
     "/transactions",
     response_model=TransactionResponse,
-    status_code=status.HTTP_201_CREATED,
 )
 def create_transaction(
     request: TransactionCreate,
+    response: Response,
+    idempotency_key: str = Header(
+        ...,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=100,
+    ),
     db: Session = Depends(get_db),
 ):
-    return process_transaction(
+    transaction, created = process_transaction(
         db=db,
         request=request,
+        idempotency_key=idempotency_key,
     )
+
+    if created:
+        response.status_code = status.HTTP_201_CREATED
+    else:
+        response.status_code = status.HTTP_200_OK
+
+    return transaction

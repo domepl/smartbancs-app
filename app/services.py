@@ -2,16 +2,92 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Account, Transaction
 from app.schemas import TransactionCreate
 
 
+def build_transaction_response(
+    db: Session,
+    transaction: Transaction,
+):
+    source_account = db.get(
+        Account,
+        transaction.source_account_id,
+    )
+
+    destination_account = db.get(
+        Account,
+        transaction.destination_account_id,
+    )
+
+    return {
+        "transaction_id": transaction.id,
+        "source_account": source_account.account_number,
+        "destination_account": destination_account.account_number,
+        "amount": transaction.amount,
+        "currency": transaction.currency,
+        "status": transaction.status,
+        "created_at": transaction.created_at,
+    }
+
+
 def process_transaction(
     db: Session,
     request: TransactionCreate,
+    idempotency_key: str,
 ):
+    # 1. Verificar si la petición ya fue procesada.
+    existing_transaction = db.execute(
+        select(Transaction).where(
+            Transaction.idempotency_key == idempotency_key
+        )
+    ).scalar_one_or_none()
+
+    if existing_transaction:
+        source_account = db.get(
+            Account,
+            existing_transaction.source_account_id,
+        )
+
+        destination_account = db.get(
+            Account,
+            existing_transaction.destination_account_id,
+        )
+
+        same_request = (
+            source_account.account_number
+            == request.source_account
+            and
+            destination_account.account_number
+            == request.destination_account
+            and
+            existing_transaction.amount
+            == request.amount
+            and
+            existing_transaction.currency
+            == request.currency
+        )
+
+        if not same_request:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Idempotency-Key was already used "
+                    "for a different transaction."
+                ),
+            )
+
+        return (
+            build_transaction_response(
+                db,
+                existing_transaction,
+            ),
+            False,
+        )
+
     if request.source_account == request.destination_account:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -19,7 +95,7 @@ def process_transaction(
         )
 
     try:
-        # 1. Localizar ambas cuentas.
+        # 2. Buscar las cuentas involucradas.
         result = db.execute(
             select(
                 Account.id,
@@ -47,10 +123,7 @@ def process_transaction(
             for row in account_rows
         }
 
-        # 2. Bloquear siempre en el mismo orden.
-        #
-        # Esto ayuda a prevenir race conditions y reduce
-        # el riesgo de deadlocks.
+        # 3. Bloquear las cuentas siempre en el mismo orden.
         locked_accounts = {}
 
         for account_id in sorted(account_ids.values()):
@@ -60,7 +133,9 @@ def process_transaction(
                 .with_for_update()
             ).scalar_one()
 
-            locked_accounts[account.account_number] = account
+            locked_accounts[
+                account.account_number
+            ] = account
 
         source_account = locked_accounts[
             request.source_account
@@ -70,7 +145,7 @@ def process_transaction(
             request.destination_account
         ]
 
-        # 3. Validar moneda.
+        # 4. Validar moneda.
         if source_account.currency != request.currency:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -83,30 +158,23 @@ def process_transaction(
                 detail="Destination account currency does not match transaction currency.",
             )
 
-        # 4. Validar saldo.
+        # 5. Validar saldo.
         if source_account.balance < request.amount:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Insufficient funds.",
             )
 
-        # 5. Actualizar saldos.
+        # 6. Actualizar saldos.
         source_account.balance -= request.amount
         destination_account.balance += request.amount
 
-        # 6. Registrar la transferencia.
-        transaction_id = str(uuid4())
-
+        # 7. Registrar transferencia.
         transaction = Transaction(
-            id=transaction_id,
-
-            # En el siguiente punto lo reemplazaremos por
-            # una clave enviada por el cliente.
-            idempotency_key=f"AUTO-{uuid4()}",
-
+            id=str(uuid4()),
+            idempotency_key=idempotency_key,
             source_account_id=source_account.id,
             destination_account_id=destination_account.id,
-
             amount=request.amount,
             currency=request.currency,
             status="COMPLETED",
@@ -114,20 +182,42 @@ def process_transaction(
 
         db.add(transaction)
 
-        # 7. Confirmar todo junto.
+        # 8. Confirmar operación.
         db.commit()
-
         db.refresh(transaction)
 
-        return {
-            "transaction_id": transaction.id,
-            "source_account": source_account.account_number,
-            "destination_account": destination_account.account_number,
-            "amount": transaction.amount,
-            "currency": transaction.currency,
-            "status": transaction.status,
-            "created_at": transaction.created_at,
-        }
+        return (
+            build_transaction_response(
+                db,
+                transaction,
+            ),
+            True,
+        )
+
+    except IntegrityError:
+        # Puede ocurrir si dos solicitudes con la misma
+        # Idempotency-Key llegan exactamente al mismo tiempo.
+        db.rollback()
+
+        existing_transaction = db.execute(
+            select(Transaction).where(
+                Transaction.idempotency_key == idempotency_key
+            )
+        ).scalar_one_or_none()
+
+        if existing_transaction:
+            return (
+                build_transaction_response(
+                    db,
+                    existing_transaction,
+                ),
+                False,
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Duplicate transaction detected.",
+        )
 
     except HTTPException:
         db.rollback()
