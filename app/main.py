@@ -10,7 +10,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import engine, get_db
-from app.models import Account
+from app.models import (
+    Account,
+    Recommendation,
+)
+
 from app.schemas import (
     TransactionCreate,
     TransactionResponse,
@@ -92,3 +96,36 @@ def create_transaction(
         response.status_code = status.HTTP_200_OK
 
     return transaction
+
+
+@app.get(
+    "/transactions/{transaction_id}/recommendation"
+)
+def get_transaction_recommendation(
+    transaction_id: str,
+    db: Session = Depends(get_db),
+):
+    recommendation = (
+        db.query(Recommendation)
+        .filter(
+            Recommendation.transaction_id
+            == transaction_id
+        )
+        .first()
+    )
+
+    if not recommendation:
+        return {
+            "transaction_id": transaction_id,
+            "status": "PENDING",
+            "recommendation": None,
+        }
+
+    return {
+        "transaction_id": transaction_id,
+        "status": "READY",
+        "recommendation":
+            recommendation.recommendation,
+        "model_version":
+            recommendation.model_version,
+    }
