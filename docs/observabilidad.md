@@ -1,40 +1,38 @@
 # Observabilidad
 
-SmartBancs implementa observabilidad básica mediante
-registros estructurados, identificadores de correlación y
-métricas compatibles con Prometheus.
+SmartBancs implementa una observabilidad básica utilizando registros de la aplicación,
+identificadores de correlación y métricas compatibles con Prometheus.
 
-## Registro de eventos (Logging)
+## Registros (Logs)
 
-La API de transacciones registra:
+La API registra:
 
-- el inicio de la transacción;
-- transacciones exitosas;
-- transacciones fallidas;
-- duración del procesamiento;
+- inicio de transacción;
+- finalización de transacción;
+- fallos en transacciones;
 - errores de base de datos.
+
+El Worker registra:
+
+- sincronización con Bancs;
+- llamadas a IA;
+- fallos de procesamiento.
 
 ## ID de correlación
 
-Cada solicitud recibe un `X-Correlation-ID`.
+Cada solicitud HTTP recibe un `X-Correlation-ID`.
 
-Si el cliente no proporciona uno, SmartBancs
-genera un UUID automáticamente.
+El identificador puede propagarse a través de:
 
-El identificador se propaga a través de:
-
-Transaction API -> Outbox -> Worker -> Bancs -> AI
-
-Esto permite rastrear una transacción a través
-de los componentes implementados.
+API -> Outbox -> Worker -> Bancs -> IA
 
 ## Métricas
 
 La API expone:
 
-`GET /metrics`
+GET /metrics
 
-Métricas principales:
+Métricas principales de la aplicación:
 
 - smartbancs_transactions_total
 - smartbancs_transactions_success_total
@@ -42,13 +40,13 @@ Métricas principales:
 - smartbancs_transaction_duration_seconds
 - smartbancs_database_errors_total
 
-## Diagnóstico de incidentes
+## Investigación de incidentes
 
-En caso de aumento de la latencia o errores de base de datos,
-se pueden utilizar los siguientes comandos de MariaDB:
+Comandos de diagnóstico útiles para MariaDB:
 
 SHOW FULL PROCESSLIST;
 
-SELECT * FROM information_schema.INNODB_TRX;
+SELECT *
+FROM information_schema.INNODB_TRX;
 
 SHOW ENGINE INNODB STATUS;

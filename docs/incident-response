@@ -1,0 +1,127 @@
+# Respuesta a incidentes simulada
+
+## Escenario
+
+Durante un pico de tráfico quincenal, algunas transferencias financieras comienzan a
+fallar y se observa una latencia elevada.
+
+Los síntomas incluyen:
+
+- aumento de la latencia de las transacciones;
+- tiempos de espera agotados (*timeouts*) en la conexión a la base de datos;
+- aumento de la tasa de errores;
+- posible contención de bloqueos o interbloqueos (*deadlocks*).
+
+Este documento describe la respuesta que se seguiría para el
+escenario de desafío simulado.
+
+## 1. Detección
+
+Las primeras señales provendrían de:
+
+- smartbancs_transactions_failed_total;
+- smartbancs_transaction_duration_seconds;
+- smartbancs_database_errors_total;
+- registros de errores de la aplicación;
+- identificadores de correlación (*correlation IDs*).
+
+Un aumento simultáneo en la latencia y en los errores de la base de datos indicaría
+que la capa de base de datos requiere investigación.
+
+## 2. Investigación inicial
+
+Se deben revisar los registros de la aplicación en busca de:
+
+- fallos en las transacciones;
+- errores de conexión;
+- códigos de error de MariaDB;
+- identificadores de correlación de transacciones;
+- *endpoints* afectados.
+
+Se pueden utilizar los siguientes comandos de MariaDB:
+
+SHOW FULL PROCESSLIST;
+
+SELECT *
+FROM information_schema.INNODB_TRX;
+
+SHOW ENGINE INNODB STATUS;
+
+Estos comandos ayudan a identificar:
+
+- consultas de larga duración;
+- transacciones bloqueadas;
+- bloqueos activos;
+- interbloqueos (*deadlocks*);
+- saturación de conexiones.
+
+## 3. Identificación del cuello de botella
+
+La investigación debe determinar si el cuello de botella principal es:
+
+- agotamiento de las conexiones a la base de datos;
+- contención de bloqueos;
+- SQL ineficiente;
+- tráfico excesivo;
+- saturación de servicios *downstream* (subsiguientes);
+- agotamiento de recursos de la aplicación.
+
+Dado que Bancs y AI son asíncronos en SmartBancs, su latencia no debería
+bloquear directamente el *endpoint* de transacciones financieras.
+
+## 4. Acciones inmediatas
+
+Las posibles acciones inmediatas incluyen:
+
+- reducir temporalmente las cargas de trabajo no críticas;
+- pausar o reducir el procesamiento de los *Workers* si la presión sobre la base de datos es alta;
+- verificar el uso del grupo de conexiones (*connection pool*) a la base de datos;
+- finalizar sesiones de base de datos de larga duración claramente anómalas si
+los procedimientos operativos lo permiten;
+- aumentar las réplicas de la aplicación si la API está saturada;
+- escalar los recursos de la base de datos si la infraestructura lo permite;
+- aplicar control de tráfico donde sea necesario.
+
+La consistencia financiera debe tener prioridad sobre el rendimiento (*throughput*).
+
+Ninguna acción debe eludir la validación de transacciones o el bloqueo de cuentas. ## 5. Investigación de la base de datos
+
+Si se detecta contención de bloqueos:
+
+- identificar las sentencias que mantienen bloqueos;
+- inspeccionar la duración de las transacciones;
+- verificar si las transacciones permanecen abiertas innecesariamente;
+- confirmar el bloqueo determinista de cuentas;
+- inspeccionar la información sobre interbloqueos (*deadlocks*);
+- verificar el comportamiento de reversión (*rollback*) y reintento.
+
+Si se detecta agotamiento de conexiones:
+
+- verificar el tamaño del grupo de conexiones (*pool*);
+- inspeccionar las sesiones activas e inactivas;
+- identificar conexiones no liberadas (*leaked connections*);
+- revisar la concurrencia de solicitudes.
+
+## 6. Validación de la recuperación
+
+Tras la mitigación, validar que:
+
+- la latencia de las transacciones vuelva a niveles normales;
+- la tasa de errores disminuya;
+- las conexiones a la base de datos se estabilicen;
+- no se hayan generado saldos negativos;
+- los eventos pendientes en la *Outbox* continúen procesándose;
+- la sincronización con Bancs se reanude;
+- las recomendaciones de IA se reanuden.
+
+## 7. Comunicación
+
+La comunicación sobre el incidente debe incluir:
+
+- el impacto actual;
+- los componentes afectados;
+- las acciones de mitigación;
+- el estado de la recuperación;
+- los riesgos pendientes.
+
+Tras el restablecimiento del servicio, se debe elaborar un informe *post-mortem*.

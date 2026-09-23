@@ -1,0 +1,108 @@
+# Ciclo de vida de la IA
+
+## Implementación actual del MVP
+
+SmartBancs incluye un servicio independiente de recomendación basado en IA.
+
+La implementación actual es una simulación funcional determinista y no
+un modelo de aprendizaje automático entrenado.
+
+Su propósito es demostrar:
+
+- la separación de servicios;
+- la ejecución asíncrona;
+- las transacciones financieras no bloqueantes;
+- la persistencia de las recomendaciones;
+- la observabilidad del servicio de IA.
+
+La versión actual del modelo se identifica como:
+
+mock-v1
+
+## Ciclo de vida de la IA en producción
+
+Una implementación de IA en producción requeriría un ciclo de vida controlado.
+
+### 1. Recopilación de datos
+
+Se recopilarían transacciones financieras históricas de acuerdo con
+las políticas de seguridad, privacidad y gobernanza.
+
+La información de identificación personal debería minimizarse o anonimizarse
+siempre que sea posible.
+
+### 2. Preparación de datos
+
+Los controles de calidad de los datos incluirían:
+
+- validación de valores faltantes;
+- análisis de valores atípicos (*outliers*);
+- normalización de características;
+- categorización de transacciones;
+- prevención de fugas de datos.
+
+### 3. Entrenamiento del modelo
+
+Se entrenarían modelos candidatos de recomendación utilizando conjuntos de datos
+versionados y *pipelines* reproducibles.
+
+Se deben registrar la configuración del entrenamiento, la versión del conjunto de datos
+y la versión del modelo.
+
+### 4. Validación
+
+Antes del despliegue, los modelos deben evaluarse utilizando conjuntos de datos
+de validación fuera de línea (*offline*).
+
+La evaluación debe incluir tanto métricas técnicas como la relevancia para el negocio.
+
+### 5. Despliegue
+
+El modelo aprobado debe desplegarse de forma independiente al servicio
+de transacciones financieras.
+
+La API de transacciones nunca debe esperar de forma síncrona a que
+un modelo de IA complete su tarea.
+
+### 6. Monitoreo
+
+El monitoreo en producción debe incluir:
+
+- latencia de inferencia;
+- errores de inferencia;
+- volumen de recomendaciones;
+- consumo de recursos;
+- distribución de datos de entrada;
+- distribución de resultados del modelo.
+
+### 7. Detección de deriva (*drift*)
+
+La deriva de datos ocurre cuando las características de entrada en producción
+cambian en comparación con el conjunto de datos de entrenamiento.
+
+La deriva del modelo ocurre cuando el rendimiento del modelo se deteriora
+con el tiempo.
+
+El monitoreo debe comparar las distribuciones y el rendimiento actuales
+con una línea base aprobada.
+
+### 8. Reentrenamiento
+
+Cuando se superan los umbrales predefinidos de deriva o rendimiento,
+se debe evaluar el reentrenamiento del modelo.
+
+Un nuevo modelo debe superar la validación antes de reemplazar
+la versión actual.
+
+### 9. Versionado y reversión (*rollback*)
+
+Cada despliegue de modelo debe tener una versión única.
+
+La plataforma debe permitir la reversión a una versión aprobada anteriormente
+si el nuevo modelo introduce problemas de rendimiento o calidad. ## Gestión de recursos
+
+Las cargas de trabajo de IA deben contar con límites independientes de CPU y memoria.
+
+Esto protege al servicio principal de transacciones frente a la contención de recursos.
+
+Si el servicio de IA deja de estar disponible, las transacciones financieras deben continuar procesándose con normalidad.
