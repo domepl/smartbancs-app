@@ -26,9 +26,128 @@ services:
           "--connect",
           "--innodb_initialized"
         ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+    restart: unless-stopped
+
+
+  api:
+    build:
+      context: .
+
+    container_name: smartbancs-api
+
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ]
+
+    environment:
+      DATABASE_HOST: mariadb
+      DATABASE_PORT: 3306
+      DATABASE_NAME: ${MARIADB_DATABASE}
+      DATABASE_USER: ${MARIADB_USER}
+      DATABASE_PASSWORD: ${MARIADB_PASSWORD}
+
+      BANCS_SERVICE_URL: http://mock-bancs:8002
+      AI_SERVICE_URL: http://ai-service:8001
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+
+  mock-bancs:
+    build:
+      context: .
+
+    container_name: smartbancs-mock-bancs
+
+    command:
+      [
+        "uvicorn",
+        "mock_bancs.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8002"
+      ]
+
+    ports:
+      - "8002:8002"
+
+    restart: unless-stopped
+
+
+  ai-service:
+    build:
+      context: .
+
+    container_name: smartbancs-ai
+
+    command:
+      [
+        "uvicorn",
+        "ai_service.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8001"
+      ]
+
+    ports:
+      - "8001:8001"
+
+    restart: unless-stopped
+
+
+  worker:
+    build:
+      context: .
+
+    container_name: smartbancs-worker
+
+    command:
+      [
+        "python",
+        "-m",
+        "worker.worker"
+      ]
+
+    environment:
+      DATABASE_HOST: mariadb
+      DATABASE_PORT: 3306
+      DATABASE_NAME: ${MARIADB_DATABASE}
+      DATABASE_USER: ${MARIADB_USER}
+      DATABASE_PASSWORD: ${MARIADB_PASSWORD}
+
+      BANCS_SERVICE_URL: http://mock-bancs:8002
+      AI_SERVICE_URL: http://ai-service:8001
+
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+      mock-bancs:
+        condition: service_started
+
+      ai-service:
+        condition: service_started
+
+    restart: unless-stopped
+
 
 volumes:
   mariadb_data:
