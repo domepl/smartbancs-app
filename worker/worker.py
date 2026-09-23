@@ -66,6 +66,9 @@ def send_to_bancs(event):
         "transaction_id": payload[
             "transaction_id"
         ],
+        "correlation_id": payload.get(
+            "correlation_id",
+        ),
         "source_account": payload[
             "source_account"
         ],
@@ -97,7 +100,11 @@ def send_to_ai(event):
     ai_payload = {
         "transaction_id": payload[
             "transaction_id"
+            
         ],
+        "correlation_id": payload.get(
+            "correlation_id",
+        ),
         "source_account": payload[
             "source_account"
         ],
@@ -124,9 +131,18 @@ def send_to_ai(event):
 
 
 def process_bancs(db, event):
+    payload = get_payload(event)
+
+    correlation_id = payload.get(
+        "correlation_id",
+        "unknown",
+    )
+
     print(
-        f"[WORKER] Sending transaction "
-        f"{event.transaction_id} to Bancs"
+        f"[WORKER] Bancs sync started "
+        f"correlation_id={correlation_id} "
+        f"transaction_id="
+        f"{event.transaction_id}"
     )
 
     try:
@@ -173,9 +189,17 @@ def process_bancs(db, event):
 
 
 def process_ai(db, event):
+    payload = get_payload(event)
+
+    correlation_id = payload.get(
+        "correlation_id",
+        "unknown",
+    )
+
     print(
-        f"[WORKER] Requesting AI recommendation "
-        f"for transaction "
+        f"[WORKER] AI request started "
+        f"correlation_id={correlation_id} "
+        f"transaction_id="
         f"{event.transaction_id}"
     )
 

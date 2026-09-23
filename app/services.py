@@ -1,5 +1,8 @@
 from uuid import uuid4
-
+from app.metrics import DATABASE_ERRORS
+from app.middleware.correlation_id import (
+    get_correlation_id,
+)
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -47,6 +50,7 @@ def create_outbox_event(
         event_type="TRANSACTION_COMPLETED",
         payload={
             "transaction_id": transaction.id,
+            "correlation_id": get_correlation_id(),
             "source_account": request.source_account,
             "destination_account": request.destination_account,
             "amount": str(request.amount),
@@ -226,11 +230,11 @@ def process_transaction(
             True,
         )
 
-    except IntegrityError:
+    except IntegrityError as error:
         # Puede ocurrir si dos solicitudes con la misma
         # Idempotency-Key llegan exactamente al mismo tiempo.
         db.rollback()
-
+        DATABASE_ERRORS.inc()
         existing_transaction = db.execute(
             select(Transaction).where(
                 Transaction.idempotency_key == idempotency_key
@@ -257,7 +261,7 @@ def process_transaction(
 
     except Exception as error:
         db.rollback()
-
+        DATABASE_ERRORS.inc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Transaction processing failed: {str(error)}",

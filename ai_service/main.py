@@ -11,6 +11,7 @@ app = FastAPI(
 
 class RecommendationRequest(BaseModel):
     transaction_id: str
+    correlation_id: str | None = None
     source_account: str
     destination_account: str
     amount: float

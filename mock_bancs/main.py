@@ -14,6 +14,7 @@ app = FastAPI(
 
 class BancsTransaction(BaseModel):
     transaction_id: str
+    correlation_id: str | None = None
     source_account: str
     destination_account: str
     amount: str
