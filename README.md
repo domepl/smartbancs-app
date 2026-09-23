@@ -225,7 +225,6 @@ La implementación actual no se presenta como un modelo de aprendizaje automáti
 
 Las consideraciones sobre el ciclo de vida de la IA en producción se describen en:
 
-[Ciclo de vida de la IA](docs/ai-lifecycle.md)
 
 ---
 
